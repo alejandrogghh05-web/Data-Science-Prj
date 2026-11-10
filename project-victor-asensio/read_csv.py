@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import KFold, cross_val_score, cross_val_predict
 
 # ---------- Load ----------
-df = pd.read_csv(r"D:\BigDataProjects\project1-datascience\datasets\Melbourne_housing_FULL.csv")
+df = pd.read_csv("project-victor-asensio\datasets\Melbourne_housing_FULL.csv")
 df = df.dropna(subset=["Price"])
 
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
