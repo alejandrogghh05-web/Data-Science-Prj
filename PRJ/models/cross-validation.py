@@ -4,18 +4,15 @@
      y contrasta si las diferencias son significativas (t de remuestreo corregida, Bonferroni).
 1.2  Importancia de variables en los tres modelos y coincidencia entre ellos.
 """
-import sys
-from itertools import combinations
-from pathlib import Path
+
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.model_selection import RepeatedKFold, cross_validate
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from modeling import build_models, original_variable  # noqa: E402
-from read_csv import CAT_FEATURES, FEATURES, NUM_FEATURES, RESULTS_DIR, TARGET, load_data  # noqa: E402
+from itertools import combinations
+from src.modeling import build_models, original_variable  # noqa: E402
+from src.read_csv import FEATURES, RESULTS_DIR, TARGET, load_data  # noqa: E402
 
 N_SPLITS, N_REPEATS = 5, 2
 RESULTS_DIR.mkdir(exist_ok=True)
