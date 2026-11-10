@@ -1,0 +1,102 @@
+APUNTES NOTEBOOK 6
+
+Random Forest (Trabajo en paralelo):
+
+Creas, por ejemplo, 100 árboles a la vez. A cada uno le das un grupo aleatorio de casas y de variables distintas. 
+Al final, le pides a los 100 árboles que calculen el precio de la casa y te quedas con la media matemática de sus 100 respuestas.
+(Es como juntar a 100 tasadores independientes y promediar sus opiniones para evitar que un fallo individual te arruine la predicción).
+
+Boosting (Trabajo en cadena / Secuencial):
+
+El Árbol 1 predice. Falla en algunas casas por 20.000 $. 
+El Árbol 2 se entrena no para predecir el precio, sino para adivinar esos 20.000 $ de error. 
+El Árbol 3 intenta corregir lo que les faltó a los dos primeros... y así sucesivamente.
+(Es una cadena de montaje donde cada especialista viene a pulir únicamente los fallos del anterior).
+
+----RANDOM FOREST------
+
+El bagging hace media de los 100 arboles, funciona por que los errores de cada arbol son totalment diferentes
+
+
+n_estimators : cuantos arboles tenemos 
+max_depth y min_samples_leaf: maximo de preguntas y minimo de valores por saco
+max_features: cuantas variables ùeden mirar cada corte, bajarlo hace los abroles mas distintos entre si
+
+Lo elegimos cunado es el priemr modelo serio en casi cualquier problema tabular y no lo elegimos cunado se tiene que explicar la decision, cuanto tneemos que sacar prediccion rapida
+
+Si dejamos que todos los arboles miren la misma variable entonces todos pondran la mejor variable la priemra, al fianl tendremos 100 arboles casi indenticos con max_features le obligamos a abrir los ojos a los arboles
+
+Cancelación de errores: El secreto no es tener árboles "perfectos", sino tener árboles independientes que se equivoquen en sitios distintos.
+
+Si n_estimators lo subimos a 1000 aboles esta ira mejor ya que hara mas medias Al aumentar a 1.000 árboles, la curva verde simplemente se estabiliza aún más alrededor de la línea gris.
+
+En Random Forest, añadir más árboles nunca provoca sobreajuste (overfitting). Lo único que hace es apurar la reducción de la varianza hasta llegar a un límite donde la curva apenas cambia, a costa de consumir un poco más de tiempo de cálculo. todos los arboles tendran comninaciones distintas
+
+
+-------------------------------------------
+Filas aleatorias (Bootstrap): Cada árbol entrena con una muestra distinta de casas.
+
+Columnas aleatorias (max_features): En cada pregunta dentro del árbol, solo se le permite elegir entre un subconjunto al azar de variables.
+-------------------------------------------
+
+----GRADIENT BOOSTING------
+
+Primer arbol tonto, con profundidad 1, llamado stump, da una primera aproximacion del precio de la casa
+
+Vemos en que se ha equivocado Residuo = Yreal - Ypredicho, si la casa valia 300.000K y el arbol 1 dijo 200.000k el residuo es +100.000
+
+Entra a jugar el segundo arbol, este arbol no aprende a predecir el precio de la casa, aprende a predecir los 100.000 de fallo 
+
+Sumamos las predicciones: Prediccion final = Arbol 1 + Arbol 2
+
+En el algortimo real se hace prediccion = Arbol 1 + (learning rate x Arbol 2)  si el arbol 2 dice suma 10.00 pero el leanign rate es de 0.10 el algoritmo suma 1.000,
+ se hace asi para dar pasitos cortos y seguros, si sumamos el 100% de cada arbol un arbol agresivo nos puede arruniar todo 
+
+El learnign_rate es un hiperparametroq ue elijo yo, se suele mover entre 0.1 y 0.30 
+
+learning_rate bajo (ej. $0.01$): Das pasos muy pequeños y seguros, reduciendo el riesgo de sobreajuste, pero necesitas muchos más árboles (ej. 1.000 o 2.000) y más tiempo de cómputo.
+learning_rate alto (ej. $0.30$): El modelo aprende rápido con pocos árboles (ej. 50), pero corre el riesgo de dar saltos demasiado agresivos y memorizar el ruido.
+
+---------GridSearchCV para encontrar la combinación óptima entre learning_rate y n_estimators para tu dataset concreto.-------------
+
+
+El arbol 1 mira la casa (x) intenta predecir el precio real (y)
+El arbol 2 mira la misma casa (x) intenta predecir lo que le falto o sobro al arobl 1(el residuo)
+El arbol 3 intenta predecir que le falto o sobro a la combinacion del arbol 1+ arbol 2 
+
+Ejemplo arbol segun los residuos Si la casa tiene más de 100 m² y está en el Barrio Centro, 
+le faltaron +100.000 € a la predicción del primer árbol. Así que para ese tipo de casas, devuelvo un ajuste de +100.000 €.
+
+
+
+
+GRADIENT BOOSTING Vs LGBMRegressor
+
+1. El clásico (Crecimiento por pisos / Level-wise)
+Es como construir un edificio por plantas simétricas:
+
+Primero hace la raíz.
+
+Luego abre 2 ramas en la Planta 1.
+
+Para pasar a la Planta 2, tiene que abrir obligatoriamente 2 ramas debajo de CADA una de la Planta 1 (teniendo 4 ramas en total).
+
+Aunque una de las ramas ya no tenga casi errores, la construye igual porque necesita que el árbol quede equilibrado piso a piso.
+
+
+
+
+2. LightGBM (Crecimiento por goteras / Leaf-wise)
+Es como un fontanero que solo va a donde hay goteras:
+
+Hace la raíz y abre 2 ramas en la Planta 1.
+
+Mira las dos ramas: la izquierda está casi perfecta, pero la derecha tiene un error gigantesco.
+
+En vez de perder tiempo haciendo ramas en la izquierda, se olvida de la izquierda y construye la Planta 2, 3 y 4 solo en la rama derecha, que es donde está el problema.
+
+
+En resumen:
+Los dos son una cadena de árboles (el Árbol 2 aprende del fallo del Árbol 1).
+
+La diferencia es que cuando el Árbol 1 se está construyendo por dentro, el clásico dibuja todas las ramas por igual piso a piso, y LightGBM sólo dibuja ramas hacia abajo donde ve que hay mucho error, ahorrando un montón de cálculos.
