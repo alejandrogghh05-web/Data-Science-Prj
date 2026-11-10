@@ -5,7 +5,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold, cross_val_score
 
 # 1. Load the data and keep rows with a price
-df = pd.read_csv(r"D:\BigDataProjects\project1-datascience\datasets\Melbourne_housing_FULL.csv")
+df = pd.read_csv("project-victor-asensio\datasets\Melbourne_housing_FULL.csv")
 df = df.dropna(subset=["Price"])
 
 # 2. Keep land rows (no building data) that have size, distance and coordinates
