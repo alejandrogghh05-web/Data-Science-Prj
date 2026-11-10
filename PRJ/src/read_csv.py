@@ -9,9 +9,8 @@ Lo importan models/cross-validation.py, models/random-forest.py y src/predict_pr
     X_cb  = df[FEATURES]                # CatBoost: tal cual, con cat_features=CAT_FEATURES
     y     = df[TARGET]
 
-Al ejecutar este archivo se generan en datasets/:
-    melbourne_limpio.csv    -> limpio y sin huecos, categóricas como texto (CatBoost)
-    melbourne_numerico.csv  -> igual, pero categóricas en columnas 0/1 con get_dummies
+Al ejecutar este archivo se genera datasets/melbourne_limpio.csv: limpio y sin huecos,
+con las categóricas como texto.
 
 Para codificar filas nuevas o modificadas (contrafactuales, casa nueva...) pasa siempre
 ref=df, así se usan las mismas categorías, medianas y escalas que en el entrenamiento:
@@ -27,9 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "datasets" / "Melbourne_housing_FULL.csv"
 RESULTS_DIR = ROOT / "results"
 
-# CSV generados por save_csvs()
-CLEAN_CSV = ROOT / "datasets" / "melbourne_limpio.csv"        # categóricas como texto (CatBoost)
-NUMERIC_CSV = ROOT / "datasets" / "melbourne_numerico.csv"    # categóricas con get_dummies
+# CSV generado por save_csv()
+CLEAN_CSV = ROOT / "datasets" / "melbourne_limpio.csv"
 
 TARGET = "Price"
 NUM_FEATURES = ["Rooms", "Bathroom", "Car", "Landsize", "BuildingArea", "YearBuilt", "Distance"]
@@ -38,11 +36,18 @@ NUM_FEATURES = ["Rooms", "Bathroom", "Car", "Landsize", "BuildingArea", "YearBui
 # Pon False si queréis responder 1.2 y 1.4 solo con características de la vivienda.
 USAR_VARIABLES_VENTA = True
 
-CAT_FEATURES = ["Type", "Regionname", "CouncilArea", "Suburb"]
+CAT_FEATURES = ["Type", "Suburb"]
 if USAR_VARIABLES_VENTA:
     CAT_FEATURES += ["Method", "SellerG"]
 FEATURES = NUM_FEATURES + CAT_FEATURES
-# Address no se usa: es un identificador (casi una dirección distinta por fila) y no generaliza.
+
+# Columnas descartadas por redundantes o por no generalizar:
+#   Regionname, CouncilArea, Postcode, Propertycount -> cada barrio tiene un único valor de cada una,
+#       así que Suburb ya las contiene. Con dummies, CouncilArea es combinación exacta de Suburb
+#       (multicolinealidad perfecta en la regresión lineal).
+#   Bedroom2 -> coincide con Rooms en el 96,5 % de las filas.
+#   Address  -> identificador (casi una dirección distinta por fila).
+# Regionname se conserva en el DataFrame (no como feature) para gráficos y para la imputación.
 
 # get_dummies: categorías con menos ventas que esto se agrupan en "Otros"
 # (evita cientos de columnas basadas en 2 o 3 casas).
@@ -61,6 +66,10 @@ GRUPOS_IMPUTACION = {
 }
 ENTEROS = ["Rooms", "Bathroom", "Car", "YearBuilt"]
 
+# Columnas que llevan indicador <columna>_imputado. Car y YearBuilt no lo llevan porque faltan casi
+# siempre en las mismas filas que Bathroom (correlación 0,96) y BuildingArea (0,83).
+INDICADORES = ["BuildingArea", "Landsize", "Bathroom"]
+
 # Random Forest de scikit-learn >= 1.4 acepta NaN directamente
 RF_ACEPTA_NAN = tuple(int(p) for p in sklearn.__version__.split(".")[:2]) >= (1, 4)
 
@@ -78,11 +87,11 @@ def load_data(path=DATA_PATH, imputar: bool = False) -> pd.DataFrame:
     df.loc[(df["BuildingArea"] <= 0) | (df["BuildingArea"] > 1000), "BuildingArea"] = np.nan
     df.loc[(df["Landsize"] <= 0) | (df["Landsize"] > 10_000), "Landsize"] = np.nan  # 0 = no informado
     df.loc[(df["YearBuilt"] < 1800) | (df["YearBuilt"] > 2018), "YearBuilt"] = np.nan
-    df.loc[df["Bathroom"] > 8, "Bathroom"] = np.nan
+    df.loc[(df["Bathroom"] == 0) | (df["Bathroom"] > 8), "Bathroom"] = np.nan   # no hay vivienda sin baño
     df.loc[df["Car"] > 10, "Car"] = np.nan
 
     df[NUM_FEATURES] = df[NUM_FEATURES].astype(float)
-    for col in CAT_FEATURES:
+    for col in CAT_FEATURES + ["Regionname"]:
         df[col] = df[col].fillna("Desconocido").astype(str)
     df = df.reset_index(drop=True)
     return impute_missing(df) if imputar else df
@@ -94,7 +103,7 @@ def impute_missing(df: pd.DataFrame, ref: pd.DataFrame | None = None) -> pd.Data
     Ejemplo: a una casa de 3 habitaciones sin BuildingArea se le pone la mediana de las casas
     de 3 habitaciones, no la de todo el dataset (que mezcla pisos y mansiones).
 
-    Por cada columna rellenada añade <columna>_imputado (1 = el valor era un hueco), para que
+    Para las columnas de INDICADORES añade <columna>_imputado (1 = el valor era un hueco), para que
     el modelo sepa qué datos son reales y para poder filtrarlos (p. ej. la pregunta 1.4 entrena
     solo con viviendas con BuildingArea real: df[df["BuildingArea_imputado"] == 0]).
 
@@ -105,8 +114,11 @@ def impute_missing(df: pd.DataFrame, ref: pd.DataFrame | None = None) -> pd.Data
     for col, grupos in GRUPOS_IMPUTACION.items():
         if col not in df or not df[col].isna().any():
             continue
-        df[f"{col}_imputado"] = df[col].isna().astype(int)
+        if col in INDICADORES:
+            df[f"{col}_imputado"] = df[col].isna().astype(int)
         for grupo in grupos:
+            if not set(grupo) <= set(df.columns) & set(ref.columns):
+                continue   # p. ej. filas nuevas que solo traen FEATURES
             medianas = ref.groupby(grupo)[col].median().rename("_mediana")
             rellenos = df[grupo].join(medianas, on=grupo)["_mediana"]
             df[col] = df[col].fillna(rellenos)
@@ -163,34 +175,26 @@ def encode(df: pd.DataFrame, model: str, ref: pd.DataFrame | None = None) -> pd.
         return X
 
     if model == "linear":
-        num = impute_missing(X, ref=ref)[NUM_FEATURES]
-        num_ref = impute_missing(ref[FEATURES])[NUM_FEATURES]
+        num = impute_missing(df, ref=ref)[NUM_FEATURES]
+        num_ref = impute_missing(ref)[NUM_FEATURES]
         num = (num - num_ref.mean()) / num_ref.std()
         return pd.concat([num, dummies(X, ref=ref)], axis=1)
 
     raise ValueError(f"Modelo no soportado: {model!r}. Usa 'rf' o 'linear' (CatBoost usa df[FEATURES]).")
 
 
-def save_csvs(df: pd.DataFrame | None = None) -> None:
-    """Guarda los datos limpios y sin huecos en dos versiones (mismas filas, mismo orden).
-
-    melbourne_limpio.csv   -> numéricas + categóricas como texto + columnas *_imputado + Price.
-    melbourne_numerico.csv -> lo mismo, pero las categóricas en columnas 0/1 (get_dummies).
-    """
+def save_csv(df: pd.DataFrame | None = None) -> None:
+    """Guarda melbourne_limpio.csv: FEATURES + columnas *_imputado + Price, sin huecos,
+    con las categóricas como texto limpio."""
     df = load_data(imputar=True) if df is None else df
     if df[NUM_FEATURES].isna().any().any():
         df = impute_missing(df)
 
     marcas = [c for c in df.columns if c.endswith("_imputado")]
     limpio = df[NUM_FEATURES + marcas + CAT_FEATURES + [TARGET]]
-    numerico = pd.concat([df[NUM_FEATURES + marcas], dummies(df), df[[TARGET]]], axis=1)
-
     limpio.to_csv(CLEAN_CSV, index=False)
-    numerico.to_csv(NUMERIC_CSV, index=False)
-    for ruta, tabla in [(CLEAN_CSV, limpio), (NUMERIC_CSV, numerico)]:
-        print(f"Guardado {ruta.name}: {tabla.shape[0]:,} filas x {tabla.shape[1]} columnas, "
-              f"{int(tabla.isna().sum().sum())} huecos")
-
+    print(f"Guardado {CLEAN_CSV.name}: {limpio.shape[0]:,} filas x {limpio.shape[1]} columnas, "
+          f"{int(limpio.isna().sum().sum())} huecos")
 
 if __name__ == "__main__":
     data = load_data()
@@ -202,4 +206,4 @@ if __name__ == "__main__":
     print("\nPrecio por tipo (AUD):")
     print(data.groupby("Type")[TARGET].describe()[["count", "50%", "mean"]].round(0).to_string())
     print()
-    save_csvs(impute_missing(data))
+    save_csv(impute_missing(data))
