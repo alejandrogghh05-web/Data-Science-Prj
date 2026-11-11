@@ -23,6 +23,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -73,8 +74,9 @@ def modelo_lineal():
     dummies de barrio sin escalar (si no, su coeficiente pierde interpretación)."""
     pre = ColumnTransformer([
         ("num", StandardScaler(), NUM_LIN),
-        ("cat", OneHotEncoder(handle_unknown="infrequent_if_exist", min_frequency=20,
-                              drop="first", sparse_output=False), CAT),
+        # drop="first" = drop_first=True de pd.get_dummies (S03). Se mantienen TODOS los barrios:
+        # agruparlos (min_frequency=20) bajaba el R² de 0,82 a 0,74 en el split 80/20 de S03.
+        ("cat", OneHotEncoder(handle_unknown="ignore", drop="first", sparse_output=False), CAT),
     ])
     return Pipeline([("prep", pre), ("model", LinearRegression())])
 
@@ -138,11 +140,8 @@ def prueba_extrapolacion(casas):
     print("\nPrecio medio por tramo de superficie (m²):")
     print(por_tramo.round(0).to_string())
 
-    # control: en el rango ya visto, ¿no pierde la regresión frente al RF? (validación simple 80/20 aleatoria)
-    rng = np.random.RandomState(RANDOM_STATE)
-    idx = rng.permutation(len(train))
-    corte_idx = int(0.8 * len(train))
-    tr, va = train.iloc[idx[:corte_idx]], train.iloc[idx[corte_idx:]]
+    # control: en el rango ya visto, ¿no pierde la regresión frente al RF? (train_test_split 80/20, random_state=42, igual que S03)
+    tr, va = train_test_split(train, test_size=0.2, random_state=RANDOM_STATE)  # como en S03
     rf2, lin2 = ajustar_con_smearing(tr)
     ctrl = pd.DataFrame({"Random Forest": metricas(va["Price"], pred_rf(rf2, va)),
                          "Regresión múltiple": metricas(va["Price"], pred_lin(lin2, va))}).T
@@ -188,7 +187,8 @@ def demo(casas):
     print(f"\nEjemplo: misma casa en {base['Suburb'].iloc[0]} aumentando la superficie construida "
           f"(el RF ha visto casas hasta {mod.max_area:.0f} m²)")
     print(pd.DataFrame({"BuildingArea": filas["BuildingArea"], "Precio_estimado": pred.round(0),
-                        "modelo_usado": quien}).to_string(index=False))
+                        "modelo_usado": quien, "solo_RF": pred_rf(mod.rf, filas).round(0),
+                        "solo_regresion": pred_lin(mod.lin, filas).round(0)}).to_string(index=False))
 
 
 if __name__ == "__main__":
