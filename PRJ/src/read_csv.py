@@ -1,4 +1,4 @@
-"""Carga, limpieza y codificación del dataset de Melbourne (sin Pipeline).
+"""Carga, limpieza y codificación del dataset de Melbourne.
 
 Lo importan models/cross-validation.py, models/random-forest.py y src/predict_price.py.
 
