@@ -22,15 +22,15 @@ import numpy as np
 import pandas as pd
 import sklearn
 
-<<<<<<< Updated upstream
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "datasets" / "Melbourne_housing_FULL.csv"
 RESULTS_DIR = ROOT / "results"
-=======
+
 # ---------- Load ----------
 df = pd.read_csv("PRJ\datasets\Melbourne_housing_FULL.csv")
 df = df.dropna(subset=["Price"])
->>>>>>> Stashed changes
+
 
 # CSV generado por save_csv()
 CLEAN_CSV = ROOT / "datasets" / "melbourne_limpio.csv"

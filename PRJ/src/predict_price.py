@@ -16,15 +16,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-<<<<<<< Updated upstream
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from modeling import build_models  # noqa: E402
 from read_csv import CAT_FEATURES, NUM_FEATURES, RESULTS_DIR, TARGET, load_data  # noqa: E402
-=======
+
 # 1. Load the data and keep rows with a price
 df = pd.read_csv("PRJ\datasets\Melbourne_housing_FULL.csv")
 df = df.dropna(subset=["Price"])
->>>>>>> Stashed changes
+
 
 RESULTS_DIR.mkdir(exist_ok=True)
 
