@@ -12,7 +12,6 @@ Qué hace este script
   3. Modelo final para producción: entrena con todas las casas y define
      predecir_casa(...): usa el RF si la superficie está dentro del rango visto y la regresión si se sale.
 
-Uso:  python judit_regresion_casas_grandes.py [ruta/melbourne_limpio.csv]
 """
 import sys
 import warnings
